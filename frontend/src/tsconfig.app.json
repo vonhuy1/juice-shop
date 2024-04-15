@@ -1,0 +1,17 @@
+{
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "../out-tsc/app",
+    "module": "es2020",
+    "allowSyntheticDefaultImports": true,
+    "types": []
+  },
+  "files": [
+    "main.ts",
+    "polyfills.ts"
+  ],
+  "include": [
+    "**/*.d.ts",
+    "frontend/src/app/forgot-password/forgot-password.component.html"
+  ]
+}
