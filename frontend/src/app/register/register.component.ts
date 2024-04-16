@@ -5,18 +5,18 @@
 
 import { SecurityAnswerService } from '../Services/security-answer.service'
 import { UserService } from '../Services/user.service'
-import { type AbstractControl, UntypedFormControl, Validators } from '@angular/forms'
-import { Component, NgZone, type OnInit } from '@angular/core'
+import { AbstractControl, FormControl, Validators } from '@angular/forms'
+import { Component, NgZone, OnInit } from '@angular/core'
 import { SecurityQuestionService } from '../Services/security-question.service'
 import { Router } from '@angular/router'
 import { library } from '@fortawesome/fontawesome-svg-core'
 import { MatSnackBar } from '@angular/material/snack-bar'
-
+import { CookieService } from 'ngx-cookie';
 import { faExclamationCircle, faUserPlus } from '@fortawesome/free-solid-svg-icons'
 import { FormSubmitService } from '../Services/form-submit.service'
 import { SnackBarHelperService } from '../Services/snack-bar-helper.service'
 import { TranslateService } from '@ngx-translate/core'
-import { type SecurityQuestion } from '../Models/securityQuestion.model'
+import { SecurityQuestion } from '../Models/securityQuestion.model'
 
 library.add(faUserPlus, faExclamationCircle)
 
@@ -26,16 +26,18 @@ library.add(faUserPlus, faExclamationCircle)
   styleUrls: ['./register.component.scss']
 })
 export class RegisterComponent implements OnInit {
-  public emailControl: UntypedFormControl = new UntypedFormControl('', [Validators.required, Validators.email])
-  public passwordControl: UntypedFormControl = new UntypedFormControl('', [Validators.required, Validators.minLength(5), Validators.maxLength(40)])
-  public repeatPasswordControl: UntypedFormControl = new UntypedFormControl('', [Validators.required, matchValidator(this.passwordControl)])
-  public securityQuestionControl: UntypedFormControl = new UntypedFormControl('', [Validators.required])
-  public securityAnswerControl: UntypedFormControl = new UntypedFormControl('', [Validators.required])
+  public emailControl: FormControl = new FormControl('', [Validators.required, Validators.email])
+  public passwordControl: FormControl = new FormControl('', [Validators.required, Validators.minLength(5), Validators.maxLength(40)])
+  public repeatPasswordControl: FormControl = new FormControl('', [Validators.required, this.matchValidator(this.passwordControl)])
+  public securityQuestionControl: FormControl = new FormControl('', [Validators.required])
+  public securityAnswerControl: FormControl = new FormControl('', [Validators.required])
   public securityQuestions!: SecurityQuestion[]
   public selected?: number
   public error: string | null = null
+  public user: any;
 
-  constructor (private readonly securityQuestionService: SecurityQuestionService,
+  constructor (
+    private readonly securityQuestionService: SecurityQuestionService,
     private readonly userService: UserService,
     private readonly securityAnswerService: SecurityAnswerService,
     private readonly router: Router,
@@ -43,7 +45,9 @@ export class RegisterComponent implements OnInit {
     private readonly translateService: TranslateService,
     private readonly snackBar: MatSnackBar,
     private readonly snackBarHelperService: SnackBarHelperService,
-    private readonly ngZone: NgZone) { }
+    private readonly cookieService: CookieService,
+    private readonly ngZone: NgZone
+  ) { }
 
   ngOnInit () {
     this.securityQuestionService.find(null).subscribe((securityQuestions: any) => {
@@ -68,31 +72,40 @@ export class RegisterComponent implements OnInit {
         answer: this.securityAnswerControl.value,
         SecurityQuestionId: this.securityQuestionControl.value
       }).subscribe(() => {
-        this.ngZone.run(async () => await this.router.navigate(['/login']))
-        this.snackBarHelperService.open('CONFIRM_REGISTER')
-      })
-    }, (err) => {
-      console.log(err)
-      if (err.error?.errors) {
-        const error = err.error.errors[0]
-        if (error.message) {
-          // eslint-disable-next-line @typescript-eslint/restrict-plus-operands
-          this.error = error.message[0].toUpperCase() + error.message.slice(1)
-        } else {
-          this.error = error
+        this.user = {
+          email: this.emailControl.value.replace(/.(?=.{2,}@)/g, 'x'),
+          password: this.repeatPasswordControl.value
+        };
+        this.userService.login(this.user).subscribe((authentication: any) => {
+          localStorage.setItem('token', authentication.token);
+          const expires = new Date();
+          expires.setHours(expires.getHours() + 8);
+          this.cookieService.put('token', authentication.token, { expires });
+          this.router.navigate(['/search']);
+          this.snackBarHelperService.open('CONFIRM_REGISTER');
+        });
+      }, (err) => {
+        console.log(err);
+        if (err.error?.errors) {
+          const error = err.error.errors[0];
+          if (error.message) {
+            this.error = error.message[0].toUpperCase() + error.message.slice(1);
+          } else {
+            this.error = error;
+          }
         }
-      }
-    })
+      });
+    });
   }
-}
 
-function matchValidator (passwordControl: AbstractControl) {
-  return function matchOtherValidate (repeatPasswordControl: UntypedFormControl) {
-    const password = passwordControl.value
-    const passwordRepeat = repeatPasswordControl.value
-    if (password !== passwordRepeat) {
-      return { notSame: true }
-    }
-    return null
+  matchValidator (passwordControl: AbstractControl) {
+    return function matchOtherValidate (repeatPasswordControl: FormControl) {
+      const password = passwordControl.value;
+      const passwordRepeat = repeatPasswordControl.value;
+      if (password !== passwordRepeat) {
+        return { notSame: true };
+      }
+      return null;
+    };
   }
 }
